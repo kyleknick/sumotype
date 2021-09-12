@@ -6,6 +6,7 @@ import { save, load } from './storage';
 import { ALIGN_LEFT, ALIGN_CENTER, ALIGN_RIGHT, CHARSET_SIZE, initCharset, renderText } from './text';
 import { getRandSeed, setRandSeed, lerp, loadImg } from './utils';
 import TILESET from '../img/tileset.webp';
+import STREET from '../img/street8x8.webp';
 
 
 const konamiCode = [38, 38, 40, 40, 37, 39, 37, 39, 66, 65];
@@ -22,10 +23,14 @@ let screen = TITLE_SCREEN;
 // so they don't seem to move faster than when traveling vertically or horizontally
 const RADIUS_ONE_AT_45_DEG = Math.cos(Math.PI / 4);
 const TIME_TO_FULL_SPEED = 150;                // in millis, duration till going full speed in any direction
+const gravity = 1;
+
 
 let countdown; // in seconds
 let hero;
 let entities;
+let sumoMat;
+let floorTile;
 
 let speak;
 
@@ -34,12 +39,16 @@ let speak;
 const CTX = c.getContext('2d');         // visible canvas
 const MAP = c.cloneNode();              // full map rendered off screen
 const MAP_CTX = MAP.getContext('2d');
-MAP.width = 640;                        // map size
-MAP.height = 480;
+MAP.width = 320;                        // map size
+MAP.height = 240;
 const VIEWPORT = c.cloneNode();           // visible portion of map/viewport
 const VIEWPORT_CTX = VIEWPORT.getContext('2d');
 VIEWPORT.width = 320;                      // viewport size
 VIEWPORT.height = 240;
+
+
+const floor = (VIEWPORT.height - 2) / 2;
+sumoMat = "xooooooooooooooooox";
 
 // camera-window & edge-snapping settings
 const CAMERA_WINDOW_X = 100;
@@ -58,17 +67,28 @@ const ATLAS = {
       { x: 48, y: 0, w: 16, h: 18 },
       { x: 64, y: 0, w: 16, h: 18 },
     ],
-    speed: 100,
+    speed: 50,
   },
   foe: {
-    'move': [
+    move: [
       { x: 0, y: 0, w: 16, h: 18 },
     ],
-    speed: 0,
+    speed: 50,
   },
+  floorTile: {
+    move: [
+      { x: 0, y: 0, w: 16, h: 18 },
+    ],
+    speed: 1,
+  }
 };
+
+let wordArray = ['a', 'b', 'c', 'd', 'l', 'z'];
+
+
 const FRAME_DURATION = 0.1; // duration of 1 animation frame, in seconds
 let tileset;   // characters sprite, embedded as a base64 encoded dataurl by build script
+let street;
 
 // LOOP VARIABLES
 
@@ -91,20 +111,12 @@ function startGame() {
   countdown = 60;
   viewportOffsetX = viewportOffsetY = 0;
   hero = createEntity('hero', VIEWPORT.width / 2, VIEWPORT.height / 2);
+  foe = createEntity('foe', (VIEWPORT.width / 2) + 60, VIEWPORT.height / 2);
   entities = [
     hero,
-    createEntity('foe', 10, 10),
-    createEntity('foe', 630 - 16, 10),
-    createEntity('foe', 630 - 16, 470 - 18),
-    createEntity('foe', 300, 200),
-    createEntity('foe', 400, 300),
-    createEntity('foe', 500, 400),
-    createEntity('foe', 10, 470 - 18),
-    createEntity('foe', 100, 100),
-    createEntity('foe', 100, 118),
-    createEntity('foe', 116, 118),
-    createEntity('foe', 116, 100),
+    foe,
   ];
+  createFloor();
   renderMap();
   screen = GAME_SCREEN;
 };
@@ -134,65 +146,95 @@ function correctAABBCollision(entity1, entity2, test) {
   const deltaMinX = entity2MaxX - entity1.x;
   const deltaMinY = entity2MaxY - entity1.y;
 
-  // AABB collision response (homegrown wall sliding, not physically correct
-  // because just pushing along one axis by the distance overlapped)
+  if (entity2.type == 'hero') {
+    return;
+  }
 
-  // entity1 moving down/right
-  if (entity1.moveX > 0 && entity1.moveY > 0) {
-    if (deltaMaxX < deltaMaxY) {
-      // collided right side first
-      entity1.x -= deltaMaxX;
-    } else {
-      // collided top side first
-      entity1.y -= deltaMaxY;
-    }
-  }
-  // entity1 moving up/right
-  else if (entity1.moveX > 0 && entity1.moveY < 0) {
-    if (deltaMaxX < deltaMinY) {
-      // collided right side first
-      entity1.x -= deltaMaxX;
-    } else {
-      // collided bottom side first
-      entity1.y += deltaMinY;
-    }
-  }
-  // entity1 moving right
-  else if (entity1.moveX > 0) {
+  else if (entity2.type == 'foe') {
     entity1.x -= deltaMaxX;
-  }
-  // entity1 moving down/left
-  else if (entity1.moveX < 0 && entity1.moveY > 0) {
-    if (deltaMinX < deltaMaxY) {
-      // collided left side first
-      entity1.x += deltaMinX;
-    } else {
-      // collided top side first
-      entity1.y -= deltaMaxY;
+    if (foe.moveRight) {
+      foe.x += 20;
     }
   }
-  // entity1 moving up/left
-  else if (entity1.moveX < 0 && entity1.moveY < 0) {
-    if (deltaMinX < deltaMinY) {
-      // collided left side first
-      entity1.x += deltaMinX;
-    } else {
-      // collided bottom side first
-      entity1.y += deltaMinY;
-    }
-  }
-  // entity1 moving left
-  else if (entity1.moveX < 0) {
-    entity1.x += deltaMinX;
-  }
+
+
   // entity1 moving down
-  else if (entity1.moveY > 0) {
+  else if (entity2.type == 'floorTile') {
     entity1.y -= deltaMaxY;
   }
-  // entity1 moving up
-  else if (entity1.moveY < 0) {
-    entity1.y += deltaMinY;
-  }
+
+
+  // if (foe.moveRight) {
+  //   foe.x += 20;
+  //   (foe.moveLeft > foe.moveRight ? -1 : 1) * lerp(0, 1, (currentTime - Math.max(foe.moveLeft, foe.moveRight)) / TIME_TO_FULL_SPEED)
+  //   // foe.moveRight = null;
+  // } else {
+  //   foe.moveX = -1;
+  // }
+
+
+
+
+  //   // AABB collision response (homegrown wall sliding, not physically correct
+  //   // because just pushing along one axis by the distance overlapped)
+
+  //   // entity1 moving down/right
+  //   if (entity1.moveX > 0 && entity1.moveY > 0) {
+  //     if (deltaMaxX < deltaMaxY) {
+  //       // collided right side first
+  //       entity1.x -= deltaMaxX;
+  //     } else {
+  //       // collided top side first
+  //       entity1.y -= deltaMaxY;
+  //     }
+  //   }
+  //   // entity1 moving up/right
+  //   else if (entity1.moveX > 0 && entity1.moveY < 0) {
+  //     if (deltaMaxX < deltaMinY) {
+  //       // collided right side first
+  //       entity1.x -= deltaMaxX;
+  //     } else {
+  //       // collided bottom side first
+  //       entity1.y += deltaMinY;
+  //     }
+  //   }
+  // entity1 moving right
+  // if (entity1.moveX > 0) {
+  //   entity1.x -= deltaMaxX;
+  // }
+  //   // entity1 moving down/left
+  //   else if (entity1.moveX < 0 && entity1.moveY > 0) {
+  //     if (deltaMinX < deltaMaxY) {
+  //       // collided left side first
+  //       entity1.x += deltaMinX;
+  //     } else {
+  //       // collided top side first
+  //       entity1.y -= deltaMaxY;
+  //     }
+  //   }
+  //   // entity1 moving up/left
+  //   else if (entity1.moveX < 0 && entity1.moveY < 0) {
+  //     if (deltaMinX < deltaMinY) {
+  //       // collided left side first
+  //       entity1.x += deltaMinX;
+  //     } else {
+  //       // collided bottom side first
+  //       entity1.y += deltaMinY;
+  //     }
+  //   }
+  //   // entity1 moving left
+  //   else if (entity1.moveX < 0) {
+  //     entity1.x += deltaMinX;
+  //   }
+  //   // entity1 moving down
+  //   else if (entity1.moveY > 0) {
+  //     entity1.y -= deltaMaxY;
+  //   }
+  //  // entity1 moving up
+  //  else if (entity1.moveY < 0) {
+  //   entity1.y += deltaMinY;
+  // }
+
 };
 
 function constrainToViewport(entity) {
@@ -247,6 +289,15 @@ function createEntity(type, x = 0, y = 0) {
   };
 };
 
+function createFloor() {
+  let x = 74;
+  for (var i = 1; i <= 11; i++) {
+    entities.push(createEntity('floorTile', x, (VIEWPORT.height / 2) + 18));
+    x += 16
+    console.log('i equals:', i)
+  }
+}
+
 function updateHeroInput() {
   // TODO can touch & desktop be handled the same way?
   if (isTouch) {
@@ -254,16 +305,41 @@ function updateHeroInput() {
     hero.moveY = hero.moveUp + hero.moveDown;
   } else {
     if (hero.moveLeft || hero.moveRight) {
+      // hero.moveX = .5;
       hero.moveX = (hero.moveLeft > hero.moveRight ? -1 : 1) * lerp(0, 1, (currentTime - Math.max(hero.moveLeft, hero.moveRight)) / TIME_TO_FULL_SPEED)
     } else {
       hero.moveX = 0;
     }
-    if (hero.moveDown || hero.moveUp) {
-      hero.moveY = (hero.moveUp > hero.moveDown ? -1 : 1) * lerp(0, 1, (currentTime - Math.max(hero.moveUp, hero.moveDown)) / TIME_TO_FULL_SPEED)
-    } else {
-      hero.moveY = 0;
-    }
+    // if (hero.moveDown || hero.moveUp) {
+    //   hero.moveY = (hero.moveUp > hero.moveDown ? -1 : 1) * lerp(0, 1, (currentTime - Math.max(hero.moveUp, hero.moveDown)) / TIME_TO_FULL_SPEED)
+    // } else {
+    //   hero.moveY = 0;
+    // }
   }
+}
+
+function updateFoe(entity) {
+  // update animation frame
+  entity.frameTime += elapsedTime;
+  if (entity.frameTime > FRAME_DURATION) {
+    entity.frameTime -= FRAME_DURATION;
+    entity.frame += 1;
+    entity.frame %= ATLAS[entity.type][entity.action].length;
+  }
+  // update position
+  const scale = entity.moveX && entity.moveY ? RADIUS_ONE_AT_45_DEG : 1;
+  const distance = entity.speed * elapsedTime * scale;
+  if (hero.x <= 65 || foe.x >= 252) {
+    entity.x += 0;
+  } else {
+    entity.x += distance * -.5;
+  }
+  if (foe.x >= 252) {
+    entity.y += distance * .5;
+  } else {
+    entity.y += 0;
+  }
+
 }
 
 function updateEntity(entity) {
@@ -278,7 +354,12 @@ function updateEntity(entity) {
   const scale = entity.moveX && entity.moveY ? RADIUS_ONE_AT_45_DEG : 1;
   const distance = entity.speed * elapsedTime * scale;
   entity.x += distance * entity.moveX;
-  entity.y += distance * entity.moveY;
+  entity.y += distance * .5;
+  // if (entity.x <= 65) {
+  //   entity.y += distance * .5;
+  // } else {
+  //   entity.y += 0;
+  // }
 };
 
 function update() {
@@ -289,16 +370,30 @@ function update() {
         screen = END_SCREEN;
       }
       updateHeroInput();
-      entities.forEach(updateEntity);
+      updateEntity(hero);
+      updateFoe(foe);
       entities.slice(1).forEach((entity) => {
-        const test = testAABBCollision(hero, entity);
+        let test = testAABBCollision(hero, entity);
         if (test.collide) {
           correctAABBCollision(hero, entity, test);
+          // if (foe.moveRight) {
+          //   foe.x += 20;
+          // }
         }
+        // let test2 = testAABBCollision(hero, sumoMat);
+        // if (test2.collide) {
+        //   correctAABBCollision(hero, sumoMat, test2);
+        // }
+        // const testOnMat = testAABBCollision(hero, sumoMat);
+        // let test2 = testAABBCollision(foe, entity);
+        // if (test2.collide) {
+        //   correctAABBCollision(foe, entity, test2);
+        // }
       });
       constrainToViewport(hero);
       updateCameraWindow();
       break;
+
   }
 };
 
@@ -333,6 +428,7 @@ function render() {
         0, 0, VIEWPORT.width, VIEWPORT.height
       );
       renderText('game screen', CHARSET_SIZE, CHARSET_SIZE);
+      // renderText(sumoMat, VIEWPORT.width / 2, (VIEWPORT.height / 2) + 18, ALIGN_CENTER);
       renderCountdown();
       // uncomment to debug mobile input handlers
       // renderDebugTouch();
@@ -357,16 +453,26 @@ function renderCountdown() {
 function renderEntity(entity, ctx = VIEWPORT_CTX) {
   const sprite = ATLAS[entity.type][entity.action][entity.frame];
   // TODO skip draw if image outside of visible canvas
-  ctx.drawImage(
-    tileset,
-    sprite.x, sprite.y, sprite.w, sprite.h,
-    Math.round(entity.x - viewportOffsetX), Math.round(entity.y - viewportOffsetY), sprite.w, sprite.h
-  );
-};
+  if (entity.type == 'floorTile') {
+    ctx.drawImage(
+      street,
+      sprite.x, sprite.y, sprite.w, sprite.h,
+      Math.round(entity.x - viewportOffsetX), Math.round(entity.y - viewportOffsetY), sprite.w, sprite.h
+    );
+  } else {
+    ctx.drawImage(
+      tileset,
+      sprite.x, sprite.y, sprite.w, sprite.h,
+      Math.round(entity.x - viewportOffsetX), Math.round(entity.y - viewportOffsetY), sprite.w, sprite.h
+    );
+    // }
+  };
+}
 
 function renderMap() {
   MAP_CTX.fillStyle = '#fff';
   MAP_CTX.fillRect(0, 0, MAP.width, MAP.height);
+
   // TODO cache map by rendering static entities on the MAP canvas
 };
 
@@ -404,12 +510,13 @@ onload = async (e) => {
 
   await initCharset(VIEWPORT_CTX);
   tileset = await loadImg(TILESET);
+  street = await loadImg(STREET);
   // speak = await initSpeech();
 
   toggleLoop(true);
 };
 
-onresize = onrotate = function() {
+onresize = onrotate = function () {
   // scale canvas to fit screen while maintaining aspect ratio
   const scaleToFit = Math.min(innerWidth / VIEWPORT.width, innerHeight / VIEWPORT.height);
   c.width = VIEWPORT.width * scaleToFit;
@@ -423,14 +530,14 @@ onresize = onrotate = function() {
 
 // UTILS
 
-document.onvisibilitychange = function(e) {
+document.onvisibilitychange = function (e) {
   // pause loop and game timer when switching tabs
   toggleLoop(!e.target.hidden);
 };
 
 // INPUT HANDLERS
 
-onkeydown = function(e) {
+onkeydown = function (e) {
   // prevent itch.io from scrolling the page up/down
   e.preventDefault();
 
@@ -443,18 +550,21 @@ onkeydown = function(e) {
           case 'KeyQ':  // French keyboard support
             hero.moveLeft = currentTime;
             break;
-          case 'ArrowUp':
-          case 'KeyW':
-          case 'KeyZ':  // French keyboard support
-            hero.moveUp = currentTime;
-            break;
+          // case 'ArrowUp':
+          // case 'KeyW':
+          // case 'KeyZ':  // French keyboard support
+          //   hero.moveUp = currentTime;
+          //   break;
           case 'ArrowRight':
           case 'KeyD':
             hero.moveRight = currentTime;
             break;
-          case 'ArrowDown':
-          case 'KeyS':
-            hero.moveDown = currentTime;
+          // case 'ArrowDown':
+          // case 'KeyS':
+          //   hero.moveDown = currentTime;
+          //   break;
+          case 'KeyF':
+            foe.moveRight = currentTime;
             break;
           case 'KeyP':
             // Pause game as soon as key is pressed
@@ -466,7 +576,7 @@ onkeydown = function(e) {
   }
 };
 
-onkeyup = function(e) {
+onkeyup = function (e) {
   switch (screen) {
     case TITLE_SCREEN:
       if (e.which !== konamiCode[konamiIndex] || konamiIndex === konamiCode.length) {
@@ -511,7 +621,13 @@ onkeyup = function(e) {
           }
           hero.moveDown = 0;
           break;
-        }
+        case 'KeyF':
+          // if (foe.moveLeft) {
+          //   foe.moveLeft = currentTime;
+          // }
+          foe.moveRight = false;
+          break;
+      }
       break;
     case END_SCREEN:
       switch (e.code) {
@@ -538,7 +654,7 @@ let isTouch = false;
 
 // adding onmousedown/move/up triggers a MouseEvent and a PointerEvent
 // on platform that support both (duplicate event, pointer > mouse || touch)
-ontouchstart = onpointerdown = function(e) {
+ontouchstart = onpointerdown = function (e) {
   e.preventDefault();
   switch (screen) {
     case GAME_SCREEN:
@@ -548,7 +664,7 @@ ontouchstart = onpointerdown = function(e) {
   }
 };
 
-ontouchmove = onpointermove = function(e) {
+ontouchmove = onpointermove = function (e) {
   e.preventDefault();
   switch (screen) {
     case GAME_SCREEN:
@@ -559,7 +675,7 @@ ontouchmove = onpointermove = function(e) {
   }
 }
 
-ontouchend = onpointerup = function(e) {
+ontouchend = onpointerup = function (e) {
   e.preventDefault();
   switch (screen) {
     case TITLE_SCREEN:
@@ -650,11 +766,11 @@ function renderDebugTouch() {
   renderDebugTouchBound(0, VIEWPORT.width, y, y, '#ff0');
 
   if (touches.length) {
-    VIEWPORT_CTX.strokeStyle = VIEWPORT_CTX.fillStyle =   '#02d';
+    VIEWPORT_CTX.strokeStyle = VIEWPORT_CTX.fillStyle = '#02d';
     VIEWPORT_CTX.beginPath();
     [x, y] = touches[0];
     VIEWPORT_CTX.moveTo(x, y);
-    touches.forEach(function([x, y]) {
+    touches.forEach(function ([x, y]) {
       VIEWPORT_CTX.lineTo(x, y);
     });
     VIEWPORT_CTX.stroke();
@@ -675,3 +791,19 @@ function renderDebugTouchBound(_minX, _maxX, _minY, _maxY, color) {
   VIEWPORT_CTX.stroke();
   VIEWPORT_CTX.closePath();
 };
+
+// create enemy template
+// class Enemy {
+//   constructor(className, startIndex, speed) {
+//     this.className = className
+//     this.startIndex = startIndex
+//     this.speed = speed
+//     this.currentIndex = startIndex
+//     this.timerID = NaN
+//   }
+// }
+
+// enemies = [
+//   new Enemy('Fred', 180, 30),
+//   new Enemy('Hank', 135, 30)
+// ]
