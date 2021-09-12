@@ -84,6 +84,12 @@ const ATLAS = {
 };
 
 let wordArray = ['a', 'b', 'c', 'd', 'l', 'z'];
+let sumoWord = wordArray[2];
+let heroWordInput = ''
+
+function renderSumoWord(arr) {
+  renderText(arr[Math.floor(Math.random() * arr.length)], 50, 50);
+}
 
 
 const FRAME_DURATION = 0.1; // duration of 1 animation frame, in seconds
@@ -428,6 +434,8 @@ function render() {
         0, 0, VIEWPORT.width, VIEWPORT.height
       );
       renderText('game screen', CHARSET_SIZE, CHARSET_SIZE);
+      // renderText(sumoWord, 50, 50);
+      renderSumoWord(wordArray);
       // renderText(sumoMat, VIEWPORT.width / 2, (VIEWPORT.height / 2) + 18, ALIGN_CENTER);
       renderCountdown();
       // uncomment to debug mobile input handlers
