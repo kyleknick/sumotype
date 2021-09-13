@@ -7,6 +7,7 @@ import { ALIGN_LEFT, ALIGN_CENTER, ALIGN_RIGHT, CHARSET_SIZE, initCharset, rende
 import { getRandSeed, setRandSeed, lerp, loadImg } from './utils';
 import TILESET from '../img/tileset.webp';
 import STREET from '../img/street8x8.webp';
+import PEOPLESET from '../img/tinycharacters.webp';
 
 
 const konamiCode = [38, 38, 40, 40, 37, 39, 37, 39, 66, 65];
@@ -15,9 +16,15 @@ let konamiIndex = 0;
 // GAMEPLAY VARIABLES
 
 const TITLE_SCREEN = 0;
-const GAME_SCREEN = 1;
-const END_SCREEN = 2;
+const LEVEL_ONE = 1;
+const LEVEL_TWO = 2;
+const LEVEL_THREE = 3;
+const END_SCREEN = 4;
 let screen = TITLE_SCREEN;
+
+let levelOneBeat = false;
+let levelTwoBeat = false;
+let levelThreeBeat = false;
 
 // factor by which to reduce both moveX and moveY when player moving diagonally
 // so they don't seem to move faster than when traveling vertically or horizontally
@@ -29,8 +36,7 @@ const gravity = 1;
 let countdown; // in seconds
 let hero;
 let entities;
-let sumoMat;
-let floorTile;
+
 
 let speak;
 
@@ -39,12 +45,12 @@ let speak;
 const CTX = c.getContext('2d');         // visible canvas
 const MAP = c.cloneNode();              // full map rendered off screen
 const MAP_CTX = MAP.getContext('2d');
-MAP.width = 320;                        // map size
-MAP.height = 240;
+MAP.width = 540;                        // map size
+MAP.height = 360;
 const VIEWPORT = c.cloneNode();           // visible portion of map/viewport
 const VIEWPORT_CTX = VIEWPORT.getContext('2d');
-VIEWPORT.width = 320;                      // viewport size
-VIEWPORT.height = 240;
+VIEWPORT.width = 540;                      // viewport size
+VIEWPORT.height = 360;
 
 
 const floor = (VIEWPORT.height - 2) / 2;
@@ -61,47 +67,59 @@ let viewportOffsetY = 0;
 const ATLAS = {
   hero: {
     move: [
-      { x: 0, y: 0, w: 16, h: 18 },
+      { x: 0, y: 0, w: 28, h: 32 },
     ],
-    speed: 50,
+    speed: 100,
+    level: 0,
+    isFloor: 0,
+    disposition: 0,
   },
   foe: {
     move: [
-      { x: 0, y: 0, w: 16, h: 18 },
+      { x: 225, y: 0, w: 28, h: 32 },
     ],
-    speed: 50
+    speed: 100,
+    level: 1,
+    isFloor: 0,
+    disposition: 1,
+  },
+  foe2: {
+    move: [
+      { x: 257, y: 0, w: 28, h: 32 },
+    ],
+    speed: 100,
+    level: 1,
+    isFloor: 0,
+    disposition: 1,
   },
   floorTile: {
     move: [
       { x: 0, y: 0, w: 16, h: 18 },
     ],
     speed: 1,
+    isFloor: 1,
+    disposition: 0,
+  },
+  levelTwoFloorTile: {
+    move: [
+      { x: 0, y: 7, w: 16, h: 18 },
+    ],
+    speed: 1,
+    isFloor: 1,
+    disposition: 0,
   }
 };
 
 let wordArray = ['sumo', 'apple', 'coke', 'chicken', 'lab', 'zoro'];
 let sumoWord = "sumo";
 let matchResult = "";
+let matchResult2 = "";
+let textEntered = "";
 
 function renderSumoWord(arr) {
   sumoWord = (arr[Math.floor(Math.random() * arr.length)]);
   console.log(sumoWord);
 }
-
-let heroWordInput = "";
-let textEntered = "";
-let wordLetterCounter = 0;
-
-// function spellCheck(letter, word1, word2) {
-//   if (word2.substring(wordLetterCounter) == letter) {
-//     word1 += letter;
-//     wordLetterCounter++;
-//     letter = "";
-//     console.log(word1);
-//   } else {
-//     word1 += "";
-//   }
-// }
 
 function spellCheck() {
   // let textEntered = e.key;
@@ -130,6 +148,7 @@ function spellCheck() {
 const FRAME_DURATION = 0.1; // duration of 1 animation frame, in seconds
 let tileset;   // characters sprite, embedded as a base64 encoded dataurl by build script
 let street;
+let peopleset;
 
 // LOOP VARIABLES
 
@@ -146,21 +165,50 @@ function unlockExtraContent() {
 }
 
 function startGame() {
-  // setRandSeed(getRandSeed());
-  // if (isMonetizationEnabled()) { unlockExtraContent() }
-  konamiIndex = 0;
-  countdown = 60;
-  viewportOffsetX = viewportOffsetY = 0;
-  hero = createEntity('hero', VIEWPORT.width / 2 - 15, VIEWPORT.height / 2);
-  foe = createEntity('foe', (VIEWPORT.width / 2) + 15, VIEWPORT.height / 2);
-  entities = [
-    hero,
-    foe,
-  ];
-  createFloor();
-  renderMap();
-  screen = GAME_SCREEN;
+  switch (screen) {
+    case LEVEL_ONE:
+      countdown = 60;
+      viewportOffsetX = viewportOffsetY = 0;
+      hero = createEntity('hero', VIEWPORT.width / 2 - 80, VIEWPORT.height / 2 - 14);
+      foe = createEntity('foe', (VIEWPORT.width / 2) + 80, (VIEWPORT.height / 2) - 14);
+      entities = [
+        hero,
+        foe,
+      ];
+      createLevelOneFloor();
+      renderMap();
+      break;
+    case LEVEL_TWO:
+      countdown = 60;
+      viewportOffsetX = viewportOffsetY = 0;
+      hero = createEntity('hero', VIEWPORT.width / 2 - 80, VIEWPORT.height / 2 - 14);
+      foe = createEntity('foe2', (VIEWPORT.width / 2) + 80, VIEWPORT.height / 2 - 14);
+      entities = [
+        hero,
+        foe,
+      ];
+      createLevelTwoFloor();
+      renderMap();
+      break;
+  }
 };
+// setRandSeed(getRandSeed());
+// if (isMonetizationEnabled()) { unlockExtraContent() }
+
+// function startGame() {
+// konamiIndex = 0;
+// countdown = 60;
+// viewportOffsetX = viewportOffsetY = 0;
+// hero = createEntity('hero', VIEWPORT.width / 2 - 15, VIEWPORT.height / 2);
+// foe = createEntity('foe', (VIEWPORT.width / 2) + 15, VIEWPORT.height / 2);
+// entities = [
+//   hero,
+//   foe,
+// ];
+// createFloor();
+// renderMap();
+// screen = LEVEL_ONE;
+// };
 
 function testAABBCollision(entity1, entity2) {
   const test = {
@@ -191,91 +239,17 @@ function correctAABBCollision(entity1, entity2, test) {
     return;
   }
 
-  else if (entity2.type == 'foe') {
+  else if (entity2.disposition == 1) {
     entity1.x -= deltaMaxX;
     if (foe.moveRight) {
       foe.x += 20;
     }
   }
 
-
-  // entity1 moving down
-  else if (entity2.type == 'floorTile') {
+  // might use this for gravity
+  else if (entity2.isFloor == 1) {
     entity1.y -= deltaMaxY;
   }
-
-
-  // if (foe.moveRight) {
-  //   foe.x += 20;
-  //   (foe.moveLeft > foe.moveRight ? -1 : 1) * lerp(0, 1, (currentTime - Math.max(foe.moveLeft, foe.moveRight)) / TIME_TO_FULL_SPEED)
-  //   // foe.moveRight = null;
-  // } else {
-  //   foe.moveX = -1;
-  // }
-
-
-
-
-  //   // AABB collision response (homegrown wall sliding, not physically correct
-  //   // because just pushing along one axis by the distance overlapped)
-
-  //   // entity1 moving down/right
-  //   if (entity1.moveX > 0 && entity1.moveY > 0) {
-  //     if (deltaMaxX < deltaMaxY) {
-  //       // collided right side first
-  //       entity1.x -= deltaMaxX;
-  //     } else {
-  //       // collided top side first
-  //       entity1.y -= deltaMaxY;
-  //     }
-  //   }
-  //   // entity1 moving up/right
-  //   else if (entity1.moveX > 0 && entity1.moveY < 0) {
-  //     if (deltaMaxX < deltaMinY) {
-  //       // collided right side first
-  //       entity1.x -= deltaMaxX;
-  //     } else {
-  //       // collided bottom side first
-  //       entity1.y += deltaMinY;
-  //     }
-  //   }
-  // entity1 moving right
-  // if (entity1.moveX > 0) {
-  //   entity1.x -= deltaMaxX;
-  // }
-  //   // entity1 moving down/left
-  //   else if (entity1.moveX < 0 && entity1.moveY > 0) {
-  //     if (deltaMinX < deltaMaxY) {
-  //       // collided left side first
-  //       entity1.x += deltaMinX;
-  //     } else {
-  //       // collided top side first
-  //       entity1.y -= deltaMaxY;
-  //     }
-  //   }
-  //   // entity1 moving up/left
-  //   else if (entity1.moveX < 0 && entity1.moveY < 0) {
-  //     if (deltaMinX < deltaMinY) {
-  //       // collided left side first
-  //       entity1.x += deltaMinX;
-  //     } else {
-  //       // collided bottom side first
-  //       entity1.y += deltaMinY;
-  //     }
-  //   }
-  //   // entity1 moving left
-  //   else if (entity1.moveX < 0) {
-  //     entity1.x += deltaMinX;
-  //   }
-  //   // entity1 moving down
-  //   else if (entity1.moveY > 0) {
-  //     entity1.y -= deltaMaxY;
-  //   }
-  //  // entity1 moving up
-  //  else if (entity1.moveY < 0) {
-  //   entity1.y += deltaMinY;
-  // }
-
 };
 
 function constrainToViewport(entity) {
@@ -324,16 +298,28 @@ function createEntity(type, x = 0, y = 0) {
     moveY: 0,
     speed: ATLAS[type].speed,
     type,
+    isFloor: ATLAS[type].isFloor,
+    disposition: ATLAS[type].disposition,
     w: sprite.w,
     x,
     y,
   };
 };
 
-function createFloor() {
+//TODO use this for getting kicked off of stage
+function createLevelOneFloor() {
   let x = 74;
-  for (var i = 1; i <= 11; i++) {
+  for (var i = 1; i <= 24; i++) {
     entities.push(createEntity('floorTile', x, (VIEWPORT.height / 2) + 18));
+    x += 16
+    console.log('p equals:', i)
+  }
+}
+
+function createLevelTwoFloor() {
+  let x = 74;
+  for (var i = 1; i <= 24; i++) {
+    entities.push(createEntity('levelTwoFloorTile', x, (VIEWPORT.height / 2) + 18));
     x += 16
     console.log('i equals:', i)
   }
@@ -370,12 +356,12 @@ function updateFoe(entity) {
   // update position
   const scale = entity.moveX && entity.moveY ? RADIUS_ONE_AT_45_DEG : 1;
   const distance = entity.speed * elapsedTime * scale;
-  if (hero.x <= 65 || foe.x >= 252) {
+  if (hero.x <= 65 || foe.x >= 420) {
     entity.x += 0;
   } else {
     entity.x += distance * -.25;
   }
-  if (foe.x >= 252) {
+  if (foe.x >= 420) {
     entity.y += distance * .5;
   } else {
     entity.y += 0;
@@ -394,9 +380,10 @@ function updateEntity(entity) {
   // update position
   const scale = entity.moveX && entity.moveY ? RADIUS_ONE_AT_45_DEG : 1;
   const distance = entity.speed * elapsedTime * scale;
-  if (hero.x <= 65 || foe.x >= 252) {
+  if (hero.x <= 65 || foe.x >= 420) {
     entity.x += 0;
-    wonMatch();
+    console.log(entity.x);
+    endOfRound();
   } else {
     entity.x += distance * .25;
   }
@@ -414,14 +401,38 @@ function wonMatch() {
   matchResult = "match win!";
 }
 
+function lostMatch() {
+  textEntered = "";
+  sumoWord = "";
+  matchResult = "match lost.."
+}
+
+function endOfRound() {
+  if (foe.x >= 420) {
+    wonMatch();
+  } else {
+    lostMatch();
+  }
+}
+
 function update() {
   switch (screen) {
-    case GAME_SCREEN:
+    case LEVEL_ONE:
       countdown -= elapsedTime;
       if (matchResult == "match win!") {
-        screen = TITLE_SCREEN;
+        // setTimeout(() => matchResult =)
+        setTimeout(() => {
+          matchResult = "";
+          sumoWord = "feather";
+          textEntered = "";
+          screen = LEVEL_TWO;
+          startGame();
+        }, 5000);
+        break;
+      } else if (matchResult == "match lost..") {
+        setTimeout(() => screen = END_SCREEN, 5000);
       } else if (countdown < 0) {
-        screen = END_SCREEN;
+        setTimeout(() => screen = END_SCREEN, 5000)
       }
       updateHeroInput();
       updateEntity(hero);
@@ -430,24 +441,32 @@ function update() {
         let test = testAABBCollision(hero, entity);
         if (test.collide) {
           correctAABBCollision(hero, entity, test);
-          // if (foe.moveRight) {
-          //   foe.x += 20;
-          // }
         }
-        // let test2 = testAABBCollision(hero, sumoMat);
-        // if (test2.collide) {
-        //   correctAABBCollision(hero, sumoMat, test2);
-        // }
-        // const testOnMat = testAABBCollision(hero, sumoMat);
-        // let test2 = testAABBCollision(foe, entity);
-        // if (test2.collide) {
-        //   correctAABBCollision(foe, entity, test2);
-        // }
       });
       constrainToViewport(hero);
       updateCameraWindow();
       break;
-
+    case LEVEL_TWO:
+      countdown -= elapsedTime;
+      if (matchResult == "match win!") {
+        setTimeout(() => screen = TITLE_SCREEN, 5000);
+      } else if (matchResult == "match lost..") {
+        setTimeout(() => screen = END_SCREEN, 5000);
+      } else if (countdown < 0) {
+        setTimeout(() => screen = END_SCREEN, 5000)
+      }
+      updateHeroInput();
+      updateEntity(hero);
+      updateFoe(foe);
+      entities.slice(1).forEach((entity) => {
+        let test = testAABBCollision(hero, entity);
+        if (test.collide) {
+          correctAABBCollision(hero, entity, test);
+        }
+      });
+      constrainToViewport(hero);
+      updateCameraWindow();
+      break;
   }
 };
 
@@ -474,17 +493,35 @@ function render() {
         renderText('konami mode on', VIEWPORT.width - CHARSET_SIZE, CHARSET_SIZE, ALIGN_RIGHT);
       }
       break;
-    case GAME_SCREEN:
+    case LEVEL_ONE:
       VIEWPORT_CTX.drawImage(
         MAP,
         // adjust x/y offset
         viewportOffsetX, viewportOffsetY, VIEWPORT.width, VIEWPORT.height,
         0, 0, VIEWPORT.width, VIEWPORT.height
       );
-      renderText('game screen', CHARSET_SIZE, CHARSET_SIZE);
+      renderText('match 1', CHARSET_SIZE, CHARSET_SIZE);
       renderText(sumoWord, 100, 30);
       renderText(textEntered, 100, 60);
       renderText(matchResult, (VIEWPORT.width / 2), (VIEWPORT.height / 2 - 60));
+      // renderText(heroWordInput, 50, 50);
+      // renderText(sumoMat, VIEWPORT.width / 2, (VIEWPORT.height / 2) + 18, ALIGN_CENTER);
+      renderCountdown();
+      // uncomment to debug mobile input handlers
+      // renderDebugTouch();
+      entities.forEach(entity => renderEntity(entity));
+      break;
+    case LEVEL_TWO:
+      VIEWPORT_CTX.drawImage(
+        MAP,
+        // adjust x/y offset
+        viewportOffsetX, viewportOffsetY, VIEWPORT.width, VIEWPORT.height,
+        0, 0, VIEWPORT.width, VIEWPORT.height
+      );
+      renderText('match 2', CHARSET_SIZE, CHARSET_SIZE);
+      renderText(sumoWord, 100, 30);
+      renderText(textEntered, 100, 60);
+      renderText(matchResult2, (VIEWPORT.width / 2), (VIEWPORT.height / 2 - 60));
       // renderText(heroWordInput, 50, 50);
       // renderText(sumoMat, VIEWPORT.width / 2, (VIEWPORT.height / 2) + 18, ALIGN_CENTER);
       renderCountdown();
@@ -516,7 +553,7 @@ function renderCountdown() {
 function renderEntity(entity, ctx = VIEWPORT_CTX) {
   const sprite = ATLAS[entity.type][entity.action][entity.frame];
   // TODO skip draw if image outside of visible canvas
-  if (entity.type == 'floorTile') {
+  if (entity.isFloor == 1) {
     ctx.drawImage(
       street,
       sprite.x, sprite.y, sprite.w, sprite.h,
@@ -524,7 +561,7 @@ function renderEntity(entity, ctx = VIEWPORT_CTX) {
     );
   } else {
     ctx.drawImage(
-      tileset,
+      peopleset,
       sprite.x, sprite.y, sprite.w, sprite.h,
       Math.round(entity.x - viewportOffsetX), Math.round(entity.y - viewportOffsetY), sprite.w, sprite.h
     );
@@ -574,6 +611,7 @@ onload = async (e) => {
   await initCharset(VIEWPORT_CTX);
   tileset = await loadImg(TILESET);
   street = await loadImg(STREET);
+  peopleset = await loadImg(PEOPLESET)
   // speak = await initSpeech();
 
   toggleLoop(true);
@@ -600,105 +638,72 @@ document.onvisibilitychange = function (e) {
 
 // INPUT HANDLERS
 
-onkeydown = function (e) {
-  // prevent itch.io from scrolling the page up/down
-  e.preventDefault();
+// onkeydown = function (e) {
+//   // prevent itch.io from scrolling the page up/down
+//   e.preventDefault();
 
-  if (!e.repeat) {
-    switch (screen) {
-      case GAME_SCREEN:
-        switch (e.code) {
-          case 'ArrowLeft':
-          case 'KeyA':
-          case 'KeyQ':  // French keyboard support
-            hero.moveLeft = currentTime;
-            break;
-          // case 'ArrowUp':
-          // case 'KeyW':
-          // case 'KeyZ':  // French keyboard support
-          //   hero.moveUp = currentTime;
-          //   break;
-          case 'ArrowRight':
-          case 'KeyD':
-            hero.moveRight = currentTime;
-            break;
-          // case 'ArrowDown':
-          // case 'KeyS':
-          //   hero.moveDown = currentTime;
-          //   break;
-          case 'KeyF':
-            foe.moveRight = currentTime;
-            break;
-          case 'KeyP':
-            // Pause game as soon as key is pressed
-            toggleLoop(!running);
-            break;
-        }
-        break;
-    }
-  }
-};
+//   if (!e.repeat) {
+//     switch (screen) {
+//       case LEVEL_ONE:
+//         switch (e.code) {
+//           case 'ArrowLeft':
+//           case 'KeyA':
+//           case 'KeyQ':  // French keyboard support
+//             hero.moveLeft = currentTime;
+//             break;
+//           // case 'ArrowUp':
+//           // case 'KeyW':
+//           // case 'KeyZ':  // French keyboard support
+//           //   hero.moveUp = currentTime;
+//           //   break;
+//           case 'ArrowRight':
+//           case 'KeyD':
+//             hero.moveRight = currentTime;
+//             break;
+//           // case 'ArrowDown':
+//           // case 'KeyS':
+//           //   hero.moveDown = currentTime;
+//           //   break;
+//           case 'KeyF':
+//             foe.moveRight = currentTime;
+//             break;
+//           case 'KeyP':
+//             // Pause game as soon as key is pressed
+//             toggleLoop(!running);
+//             break;
+//         }
+//         break;
+//     }
+//   }
+// };
 
 onkeyup = function (e) {
   switch (screen) {
     case TITLE_SCREEN:
       if (e.which !== konamiCode[konamiIndex] || konamiIndex === konamiCode.length) {
+        screen = LEVEL_ONE;
         startGame();
       } else {
         konamiIndex++;
       }
       break;
-    case GAME_SCREEN:
+    case LEVEL_ONE:
       if (e.key.length > 1) {
+        toggleLoop(!running);
         break;
       } else {
         textEntered += e.key;
         spellCheck();
       }
-      // switch (e.code) {
-      //   case 'ArrowLeft':
-      //   case 'KeyA':
-      //   case 'KeyQ': // French keyboard support
-      //     if (hero.moveRight) {
-      //       // reversing right while hero moving left
-      //       hero.moveRight = currentTime;
-      //     }
-      //     hero.moveLeft = 0;
-      //     break;
-      //   case 'ArrowRight':
-      //   case 'KeyD':
-      //     if (hero.moveLeft) {
-      //       // reversing left while hero moving right
-      //       hero.moveLeft = currentTime;
-      //     }
-      //     hero.moveRight = 0;
-      //     break;
-      //   case 'ArrowUp':
-      //   case 'KeyW':
-      //   case 'KeyZ': // French keyboard support
-      //     // let heroWordInput = e.key;
-      //     // console.log(heroWordInput.type);
-      //     // if (hero.moveDown) {
-      //     //   // reversing down while hero moving up
-      //     //   hero.moveDown = currentTime;
-      //     // }
-      //     // hero.moveUp = 0;
-      //     break;
-      //   case 'ArrowDown':
-      //   case 'KeyS':
-      //     if (hero.moveUp) {
-      //       // reversing up while hero moving down
-      //       hero.moveUp = currentTime;
-      //     }
-      //     hero.moveDown = 0;
-      //     break;
-      //   case 'KeyF':
-      //     // if (foe.moveLeft) {
-      //     //   foe.moveLeft = currentTime;
-      //     // }
-      //     foe.moveRight = false;
-      //     break;
-      // }
+      break;
+    case LEVEL_TWO:
+      if (e.key.length > 1) {
+        toggleLoop(!running);
+        break;
+      } else {
+        textEntered += e.key;
+        spellCheck();
+      }
       break;
     case END_SCREEN:
       switch (e.code) {
@@ -730,7 +735,7 @@ let isTouch = false;
 ontouchstart = onpointerdown = function (e) {
   e.preventDefault();
   switch (screen) {
-    case GAME_SCREEN:
+    case LEVEL_ONE:
       isTouch = true;
       [maxX, maxY] = [minX, minY] = pointerLocation(e);
       break;
@@ -740,7 +745,7 @@ ontouchstart = onpointerdown = function (e) {
 ontouchmove = onpointermove = function (e) {
   e.preventDefault();
   switch (screen) {
-    case GAME_SCREEN:
+    case LEVEL_ONE:
       if (minX && minY) {
         setTouchPosition(pointerLocation(e));
       }
@@ -754,7 +759,7 @@ ontouchend = onpointerup = function (e) {
     case TITLE_SCREEN:
       startGame();
       break;
-    case GAME_SCREEN:
+    case LEVEL_ONE:
       isTouch = false;
       // stop hero
       hero.moveLeft = hero.moveRight = hero.moveDown = hero.moveUp = 0;
