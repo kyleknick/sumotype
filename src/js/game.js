@@ -62,10 +62,6 @@ const ATLAS = {
   hero: {
     move: [
       { x: 0, y: 0, w: 16, h: 18 },
-      { x: 16, y: 0, w: 16, h: 18 },
-      { x: 32, y: 0, w: 16, h: 18 },
-      { x: 48, y: 0, w: 16, h: 18 },
-      { x: 64, y: 0, w: 16, h: 18 },
     ],
     speed: 50,
   },
@@ -73,7 +69,7 @@ const ATLAS = {
     move: [
       { x: 0, y: 0, w: 16, h: 18 },
     ],
-    speed: 50,
+    speed: 50
   },
   floorTile: {
     move: [
@@ -83,13 +79,52 @@ const ATLAS = {
   }
 };
 
-let wordArray = ['a', 'b', 'c', 'd', 'l', 'z'];
-let sumoWord = wordArray[2];
-let heroWordInput = ''
+let wordArray = ['sumo', 'apple', 'coke', 'chicken', 'lab', 'zoro'];
+let sumoWord = "sumo";
+let matchResult = "";
 
 function renderSumoWord(arr) {
-  renderText(arr[Math.floor(Math.random() * arr.length)], 50, 50);
+  sumoWord = (arr[Math.floor(Math.random() * arr.length)]);
+  console.log(sumoWord);
 }
+
+let heroWordInput = "";
+let textEntered = "";
+let wordLetterCounter = 0;
+
+// function spellCheck(letter, word1, word2) {
+//   if (word2.substring(wordLetterCounter) == letter) {
+//     word1 += letter;
+//     wordLetterCounter++;
+//     letter = "";
+//     console.log(word1);
+//   } else {
+//     word1 += "";
+//   }
+// }
+
+function spellCheck() {
+  // let textEntered = e.key;
+  let sumoWordMatch = sumoWord.substring(0, textEntered.length);
+
+  if (textEntered == sumoWord) {
+    foe.x += 40;
+    textEntered = "";
+    renderSumoWord(wordArray);
+  } else {
+    if (textEntered == sumoWordMatch) {
+      console.log('correct so far');
+    } else {
+      console.log('mistakes');
+      textEntered = textEntered.substring(0, textEntered.length - 1);
+    }
+  }
+}
+
+// if (word1 == word2) {
+//   heroWordInput = "";
+//   foe.x += 20;
+// }
 
 
 const FRAME_DURATION = 0.1; // duration of 1 animation frame, in seconds
@@ -116,8 +151,8 @@ function startGame() {
   konamiIndex = 0;
   countdown = 60;
   viewportOffsetX = viewportOffsetY = 0;
-  hero = createEntity('hero', VIEWPORT.width / 2, VIEWPORT.height / 2);
-  foe = createEntity('foe', (VIEWPORT.width / 2) + 60, VIEWPORT.height / 2);
+  hero = createEntity('hero', VIEWPORT.width / 2 - 15, VIEWPORT.height / 2);
+  foe = createEntity('foe', (VIEWPORT.width / 2) + 15, VIEWPORT.height / 2);
   entities = [
     hero,
     foe,
@@ -338,7 +373,7 @@ function updateFoe(entity) {
   if (hero.x <= 65 || foe.x >= 252) {
     entity.x += 0;
   } else {
-    entity.x += distance * -.5;
+    entity.x += distance * -.25;
   }
   if (foe.x >= 252) {
     entity.y += distance * .5;
@@ -359,7 +394,12 @@ function updateEntity(entity) {
   // update position
   const scale = entity.moveX && entity.moveY ? RADIUS_ONE_AT_45_DEG : 1;
   const distance = entity.speed * elapsedTime * scale;
-  entity.x += distance * entity.moveX;
+  if (hero.x <= 65 || foe.x >= 252) {
+    entity.x += 0;
+    wonMatch();
+  } else {
+    entity.x += distance * .25;
+  }
   entity.y += distance * .5;
   // if (entity.x <= 65) {
   //   entity.y += distance * .5;
@@ -368,11 +408,19 @@ function updateEntity(entity) {
   // }
 };
 
+function wonMatch() {
+  textEntered = "";
+  sumoWord = "";
+  matchResult = "match win!";
+}
+
 function update() {
   switch (screen) {
     case GAME_SCREEN:
       countdown -= elapsedTime;
-      if (countdown < 0) {
+      if (matchResult == "match win!") {
+        screen = TITLE_SCREEN;
+      } else if (countdown < 0) {
         screen = END_SCREEN;
       }
       updateHeroInput();
@@ -434,8 +482,10 @@ function render() {
         0, 0, VIEWPORT.width, VIEWPORT.height
       );
       renderText('game screen', CHARSET_SIZE, CHARSET_SIZE);
-      // renderText(sumoWord, 50, 50);
-      renderSumoWord(wordArray);
+      renderText(sumoWord, 100, 30);
+      renderText(textEntered, 100, 60);
+      renderText(matchResult, (VIEWPORT.width / 2), (VIEWPORT.height / 2 - 60));
+      // renderText(heroWordInput, 50, 50);
       // renderText(sumoMat, VIEWPORT.width / 2, (VIEWPORT.height / 2) + 18, ALIGN_CENTER);
       renderCountdown();
       // uncomment to debug mobile input handlers
@@ -452,9 +502,14 @@ function render() {
 };
 
 function renderCountdown() {
-  const minutes = Math.floor(Math.ceil(countdown) / 60);
-  const seconds = Math.ceil(countdown) - minutes * 60;
-  renderText(`${minutes}:${seconds <= 9 ? '0' : ''}${seconds}`, VIEWPORT.width - CHARSET_SIZE, CHARSET_SIZE, ALIGN_RIGHT);
+  if (matchResult == "") {
+    const minutes = Math.floor(Math.ceil(countdown) / 60);
+    const seconds = Math.ceil(countdown) - minutes * 60;
+    renderText(`${minutes}:${seconds <= 9 ? '0' : ''}${seconds}`, VIEWPORT.width - CHARSET_SIZE, CHARSET_SIZE, ALIGN_RIGHT);
+  } else {
+    renderText('time', VIEWPORT.width - CHARSET_SIZE, CHARSET_SIZE, ALIGN_RIGHT);
+  }
+
 
 };
 
@@ -594,48 +649,56 @@ onkeyup = function (e) {
       }
       break;
     case GAME_SCREEN:
-      switch (e.code) {
-        case 'ArrowLeft':
-        case 'KeyA':
-        case 'KeyQ': // French keyboard support
-          if (hero.moveRight) {
-            // reversing right while hero moving left
-            hero.moveRight = currentTime;
-          }
-          hero.moveLeft = 0;
-          break;
-        case 'ArrowRight':
-        case 'KeyD':
-          if (hero.moveLeft) {
-            // reversing left while hero moving right
-            hero.moveLeft = currentTime;
-          }
-          hero.moveRight = 0;
-          break;
-        case 'ArrowUp':
-        case 'KeyW':
-        case 'KeyZ': // French keyboard support
-          if (hero.moveDown) {
-            // reversing down while hero moving up
-            hero.moveDown = currentTime;
-          }
-          hero.moveUp = 0;
-          break;
-        case 'ArrowDown':
-        case 'KeyS':
-          if (hero.moveUp) {
-            // reversing up while hero moving down
-            hero.moveUp = currentTime;
-          }
-          hero.moveDown = 0;
-          break;
-        case 'KeyF':
-          // if (foe.moveLeft) {
-          //   foe.moveLeft = currentTime;
-          // }
-          foe.moveRight = false;
-          break;
+      if (e.key.length > 1) {
+        break;
+      } else {
+        textEntered += e.key;
+        spellCheck();
       }
+      // switch (e.code) {
+      //   case 'ArrowLeft':
+      //   case 'KeyA':
+      //   case 'KeyQ': // French keyboard support
+      //     if (hero.moveRight) {
+      //       // reversing right while hero moving left
+      //       hero.moveRight = currentTime;
+      //     }
+      //     hero.moveLeft = 0;
+      //     break;
+      //   case 'ArrowRight':
+      //   case 'KeyD':
+      //     if (hero.moveLeft) {
+      //       // reversing left while hero moving right
+      //       hero.moveLeft = currentTime;
+      //     }
+      //     hero.moveRight = 0;
+      //     break;
+      //   case 'ArrowUp':
+      //   case 'KeyW':
+      //   case 'KeyZ': // French keyboard support
+      //     // let heroWordInput = e.key;
+      //     // console.log(heroWordInput.type);
+      //     // if (hero.moveDown) {
+      //     //   // reversing down while hero moving up
+      //     //   hero.moveDown = currentTime;
+      //     // }
+      //     // hero.moveUp = 0;
+      //     break;
+      //   case 'ArrowDown':
+      //   case 'KeyS':
+      //     if (hero.moveUp) {
+      //       // reversing up while hero moving down
+      //       hero.moveUp = currentTime;
+      //     }
+      //     hero.moveDown = 0;
+      //     break;
+      //   case 'KeyF':
+      //     // if (foe.moveLeft) {
+      //     //   foe.moveLeft = currentTime;
+      //     // }
+      //     foe.moveRight = false;
+      //     break;
+      // }
       break;
     case END_SCREEN:
       switch (e.code) {
@@ -649,6 +712,8 @@ onkeyup = function (e) {
       break;
   }
 };
+
+
 
 // MOBILE INPUT HANDLERS
 
